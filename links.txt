@@ -1,0 +1,17 @@
+https://github.com/SergioFacchini/anki-cards-web-browser/blob/master/documentation/Processing%20Anki's%20.apkg%20files.md
+
+https://github.com/kerrickstaley/genanki
+
+{
+  "input": {
+    "text": "Μην το κάνεις αυτό."
+  },
+  "voice": {
+    "languageCode": "el-GR"
+  },
+  "audioConfig": {
+    "audioEncoding": "MP3"
+  }
+}
+
+https://cloud.google.com/text-to-speech/docs/reference/rest/v1/text/synthesize
