@@ -1,0 +1,30 @@
+{
+  "name": "anki-tts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "rimraf dist/ && tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fvclaus/anki-tts.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/fvclaus/anki-tts/issues"
+  },
+  "homepage": "https://github.com/fvclaus/anki-tts#readme",
+  "dependencies": {
+    "@tsconfig/esm": "^1.0.3",
+    "@tsconfig/node18": "^2.0.0",
+    "@types/node": "^20.1.0",
+    "rimraf": "^5.0.0",
+    "sqlite": "^4.2.0",
+    "sqlite3": "^5.1.6",
+    "typescript": "^5.0.4"
+  }
+}
