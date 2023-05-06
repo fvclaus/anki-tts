@@ -16,7 +16,10 @@
             "outFiles": [
                 "${workspaceFolder}/dist/**/*.mjs"
             ],
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "env": {
+                "GOOGLE_APPLICATION_CREDENTIALS": "${env:GOOGLE_APPLICATION_CREDENTIALS}"
+            }
         }
     ]
 }
