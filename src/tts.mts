@@ -1,14 +1,14 @@
 import { execSync } from "child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { homedir, tmpdir } from "os";
-import { join } from "path";
+import { basename, dirname, join, parse } from "path";
 import sqlite3 from 'sqlite3'
 import { open } from 'sqlite'
 import textToSpeech from '@google-cloud/text-to-speech';
 import { decodeHTML, encodeHTML } from "entities";
 
-const path = "/home/fredo/temp/anki/Ellinika A1 (LMU).apkg"
-const outPath = "/home/fredo/temp/anki/Ellinika A1 (LMU)_audio.apkg"
+const path = "/home/fredo/temp/anki/Ellinika A1 Notes.apkg"
+const outPath = `${dirname(path)}/${parse(path).name}_audio.apkg`
 const textFieldName = "Greek"
 const translationFieldName = "English";
 const pronunciationFieldName = "Greek Pronunciation"
@@ -84,29 +84,25 @@ try {
         }
         const flds = note.flds.split(FIELD_SEPARATOR);
         /** Filter start */
-        const filterFieldIndex = findIndex('Unit', model);
-        if (filterFieldIndex == -1) {
-            console.warn(`Did not find filter field for note ${note.id}`);
-        }
-        const filterFieldValue = flds[filterFieldIndex];
-        if (!["0", "1"].includes(filterFieldValue)) {
-            console.info(`Skipping note ${note.id}, filter field has value ${filterFieldValue}`);
-            continue;
-        }
+        // const filterFieldIndex = findIndex('Unit', model);
+        // if (filterFieldIndex == -1) {
+        //     console.warn(`Did not find filter field for note ${note.id}`);
+        // }
+        // const filterFieldValue = flds[filterFieldIndex];
+        // if (!["0", "1"].includes(filterFieldValue)) {
+        //     console.info(`Skipping note ${note.id}, filter field has value ${filterFieldValue}`);
+        //     continue;
+        // }
         /** Filter end */
 
         const textFieldValue = flds[textFieldIndex];
         const translationFieldValue = flds[translationFieldIndex];
         console.log(`Looking at ${textFieldValue} and ${translationFieldValue}`);
 
-        if (translationFieldValue.includes("[sound:")) {
-            console.log(`Sound already present in card ${note.id}. Skipping`);
-        }
-
         const speech = await convertTextToSpeech(decodeHTML(textFieldValue));
         const mediaIndex = '' + nextMediaIndex++;
         writeFileSync(join(tmpDir, mediaIndex), speech, 'binary');
-        const mediaFilename = `${translationFieldValue.replaceAll(' ', '_')}.mp3`
+        const mediaFilename = `${translationFieldValue.replaceAll(' ', '_').replaceAll(/[^a-zA-Z_1-9]/g, '')}.mp3`
         media[mediaIndex] = mediaFilename;
 
         flds[pronunciationFieldIndex] = `[sound:${mediaFilename}]`;
