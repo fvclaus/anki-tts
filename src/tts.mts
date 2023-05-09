@@ -175,7 +175,7 @@ try {
         const speech = await convertTextToSpeech(decodedTextFieldValue);
         const mediaIndex = '' + nextMediaIndex++;
         writeFileSync(join(tmpDir, mediaIndex), speech, 'binary');
-        const mediaFilename = `${transliterate(decodedTextFieldValue).replaceAll(' ', '_').replaceAll(/\./g, '')}.mp3`
+        const mediaFilename = `${transliterate(decodedTextFieldValue).replaceAll(' ', '_').replaceAll(/\.|\?/g, '')}.mp3`
         media[mediaIndex] = mediaFilename;
 
         flds[pronunciationFieldIndex] = `[sound:${mediaFilename}]`;
