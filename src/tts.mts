@@ -8,6 +8,7 @@ import textToSpeech from '@google-cloud/text-to-speech';
 import { decodeHTML, encodeHTML } from "entities";
 
 const path = "/home/fredo/temp/anki/Ellinika A1 Notes.apkg"
+// const path = "/home/fredo/temp/anki/Ellinika A1 (LMU).apkg"
 const outPath = `${dirname(path)}/${parse(path).name}_audio.apkg`
 const textFieldName = "Greek"
 const translationFieldName = "English";
@@ -29,6 +30,77 @@ if (!existsSync(TTS_CACHE_PATH)) {
 }
 
 const ttsClient = new textToSpeech.TextToSpeechClient();
+
+const transliterationMap = {
+    'α': 'a',
+    'ά': 'á',
+    'αι': 'ae',
+    'ς': 's',
+    'ε': 'e',
+    'ει': 'e',
+    'ρ': 'r',
+    'τ': 't',
+    'υ': 'y',
+    'ύ': 'ý',
+    'θ': 'th',
+    'ι': 'i',
+    'ί': 'í',
+    'ο': 'o',
+    'ό': 'ó',
+    'οι': 'oe',
+    'ou': 'u',
+    'π': 'p',
+    'σ': 's',
+    'δ': 'd',
+    'φ': 'ph',
+    'γ': 'g',
+    'η': 'e',
+    'ξ': 'x',
+    'κ': 'c',
+    'λ': 'l',
+    'ζ': 'z',
+    'χ': 'ch',
+    'ψ': 'ps',
+    'ω': 'o',
+    'ώ': 'ó',
+    'β': 'b',
+    'ν': 'n',
+    'μ': 'm',
+    ';': '?'
+} as {[key: string]: string};
+
+Object.entries(transliterationMap).forEach(([key, value]) => {
+    transliterationMap[key.toLocaleUpperCase()] = value.toLocaleUpperCase();
+    if (key.length == 2) {
+        transliterationMap[`${key[0].toLocaleUpperCase()}${key[1]}`] = `${value[0].toLocaleUpperCase()}${value[0]}`;
+    }
+
+});
+
+
+const transliterate = (text: string): string => {
+    let transliteratedText = '';
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char.match(/\s|\./)) {
+            transliteratedText+= char;
+            continue;
+        }
+        const nextChar = text[i + 1];
+
+        const combinedTransliteration = transliterationMap[`${char}${nextChar}`];
+        const singleTransliteration = transliterationMap[char];
+        if (combinedTransliteration != null) {
+            transliteratedText += combinedTransliteration;
+            i++;
+        } else if (singleTransliteration != null) {
+            transliteratedText += singleTransliteration;
+        } else {
+            throw new Error(`Cannot transliterate ${char} in ${text}`);
+        }
+    }
+    return transliteratedText;
+}
 
 const convertTextToSpeech = async (text: string): Promise<string> => {
     const cachePath = join(TTS_CACHE_PATH, `${text}.mp3`);
@@ -99,10 +171,11 @@ try {
         const translationFieldValue = flds[translationFieldIndex];
         console.log(`Looking at ${textFieldValue} and ${translationFieldValue}`);
 
-        const speech = await convertTextToSpeech(decodeHTML(textFieldValue));
+        const decodedTextFieldValue = decodeHTML(textFieldValue);
+        const speech = await convertTextToSpeech(decodedTextFieldValue);
         const mediaIndex = '' + nextMediaIndex++;
         writeFileSync(join(tmpDir, mediaIndex), speech, 'binary');
-        const mediaFilename = `${translationFieldValue.replaceAll(' ', '_').replaceAll(/[^a-zA-Z_1-9]/g, '')}.mp3`
+        const mediaFilename = `${transliterate(decodedTextFieldValue).replaceAll(' ', '_').replaceAll(/\./g, '')}.mp3`
         media[mediaIndex] = mediaFilename;
 
         flds[pronunciationFieldIndex] = `[sound:${mediaFilename}]`;
