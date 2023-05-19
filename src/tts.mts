@@ -1,13 +1,13 @@
 import { execSync } from "child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { homedir, tmpdir } from "os";
-import { basename, dirname, join, parse } from "path";
+import { dirname, join, parse } from "path";
 import sqlite3 from 'sqlite3'
 import { open } from 'sqlite'
 import textToSpeech from '@google-cloud/text-to-speech';
-import { decodeHTML, encodeHTML } from "entities";
+import { decodeHTML } from "entities";
 
-const path = "/home/fredo/temp/anki/Ellinika A1 Notes.apkg"
+const path = "/home/fredo/temp/anki v3/Ellinika A1.apkg"
 // const path = "/home/fredo/temp/anki/Ellinika A1 (LMU).apkg"
 const outPath = `${dirname(path)}/${parse(path).name}_audio.apkg`
 const textFieldName = "Greek"
@@ -31,12 +31,50 @@ if (!existsSync(TTS_CACHE_PATH)) {
 
 const ttsClient = new textToSpeech.TextToSpeechClient();
 
+const fixFilenameForAnkiMobile = (filename: string): string => {
+    return filename.replaceAll(' ', '_')
+        .replaceAll('.', '')
+        .replaceAll('?', '')
+        .replaceAll('!', '')
+        .replaceAll('\\', '')
+        .replaceAll('/', '')
+        .replaceAll('\u00a0', '');
+}
+
+const toProperGreekMap = {
+    'ì': 'ί',
+    'í': 'ί',
+    'ὶ': 'ί',
+    'ὺ': 'ύ',
+    'ὲ': 'έ',
+    'ὼ': 'ώ',
+    'ὰ': 'ά',
+    'ὴ': 'ή',
+    '?': ';'
+} as {[key: string]: string}
+
+const convertToProperGreek = (text: string): string => {
+    let greekText = '';
+    for (let i = 0; i < text.length; i++) {
+        const maybeRomanChar = text[i];
+        const greekChar = toProperGreekMap[maybeRomanChar];
+        if (greekChar != null) {
+            greekText += greekChar;
+        } else {
+            greekText += maybeRomanChar;
+        }
+    }
+    return greekText;
+}
+
+
 const transliterationMap = {
     'α': 'a',
     'ά': 'á',
     'αι': 'ae',
     'ς': 's',
     'ε': 'e',
+    'έ': 'é',
     'ει': 'e',
     'ρ': 'r',
     'τ': 't',
@@ -55,6 +93,7 @@ const transliterationMap = {
     'φ': 'ph',
     'γ': 'g',
     'η': 'e',
+    'ή': 'é',
     'ξ': 'x',
     'κ': 'c',
     'λ': 'l',
@@ -66,7 +105,23 @@ const transliterationMap = {
     'β': 'b',
     'ν': 'n',
     'μ': 'm',
-    ';': '?'
+    ';': '?',
+    ',': ',',
+    '/': '/',
+    '!': '!',
+    '\'': '\'',
+    '(': '(',
+    ')': ')',
+    '0': '0',
+    '1': '1',
+    '2': '2',
+    '3': '3',
+    '4': '4',
+    '5': '5',
+    '6': '6',
+    '7': '7',
+    '8': '8',
+    '9': '9'
 } as {[key: string]: string};
 
 Object.entries(transliterationMap).forEach(([key, value]) => {
@@ -103,7 +158,7 @@ const transliterate = (text: string): string => {
 }
 
 const convertTextToSpeech = async (text: string): Promise<string> => {
-    const cachePath = join(TTS_CACHE_PATH, `${text}.mp3`);
+    const cachePath = join(TTS_CACHE_PATH, `${text.replaceAll(/\//g, " ")}.mp3`);
     if (!existsSync(cachePath)) {
         console.log(`${text} is not cached. Downloading`)
         const [response] = await ttsClient.synthesizeSpeech({
@@ -156,18 +211,20 @@ try {
         }
         const flds = note.flds.split(FIELD_SEPARATOR);
         /** Filter start */
-        // const filterFieldIndex = findIndex('Unit', model);
-        // if (filterFieldIndex == -1) {
-        //     console.warn(`Did not find filter field for note ${note.id}`);
-        // }
-        // const filterFieldValue = flds[filterFieldIndex];
-        // if (!["0", "1"].includes(filterFieldValue)) {
-        //     console.info(`Skipping note ${note.id}, filter field has value ${filterFieldValue}`);
-        //     continue;
-        // }
+        const filterFieldIndex = findIndex('Unit', model);
+        if (filterFieldIndex == -1) {
+            console.warn(`Did not find filter field for note ${note.id}`);
+        }
+        const filterFieldValue = flds[filterFieldIndex];
+        if (!["0", "1", "2"].includes(filterFieldValue)) {
+            console.info(`Skipping note ${note.id}, filter field has value ${filterFieldValue}`);
+            continue;
+        }
         /** Filter end */
 
-        const textFieldValue = flds[textFieldIndex];
+        const textFieldValue = convertToProperGreek(flds[textFieldIndex]);
+        flds[textFieldIndex] = textFieldValue;
+
         const translationFieldValue = flds[translationFieldIndex];
         console.log(`Looking at ${textFieldValue} and ${translationFieldValue}`);
 
@@ -175,12 +232,15 @@ try {
         const speech = await convertTextToSpeech(decodedTextFieldValue);
         const mediaIndex = '' + nextMediaIndex++;
         writeFileSync(join(tmpDir, mediaIndex), speech, 'binary');
-        const mediaFilename = `${transliterate(decodedTextFieldValue).replaceAll(' ', '_').replaceAll(/\.|\?/g, '')}.mp3`
+        const mediaFilename = fixFilenameForAnkiMobile(`${transliterate(decodedTextFieldValue)}.mp3`);
         media[mediaIndex] = mediaFilename;
 
         flds[pronunciationFieldIndex] = `[sound:${mediaFilename}]`;
-
-        db.exec(`UPDATE notes set flds = '${flds.join(FIELD_SEPARATOR)}' WHERE id = ${note.id} `)
+        
+        // Prevent apostrophes from terminating the string.
+        const sql = `UPDATE notes set flds = '${flds.join(FIELD_SEPARATOR).replaceAll(/'/g, "''")}' WHERE id = ${note.id} `;
+        console.log(`Executing ${sql}`);
+        db.exec(sql)
 
     }
 
@@ -191,13 +251,3 @@ try {
     rmSync(tmpDir, {recursive: true, force: true});
     console.log(`Deleted tmpDir ${tmpDir}`)
 }
-// Open collection
-// Find fields array
-// Iterate through cards
-// Extract foreign field
-// Translate
-// Store mp3 as media
-// Update media file
-// Update note
-// Zip
-
