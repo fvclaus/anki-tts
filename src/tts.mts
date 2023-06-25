@@ -50,14 +50,22 @@ const toProperGreekMap = {
     'ὼ': 'ώ',
     'ὰ': 'ά',
     'ὴ': 'ή',
-    '?': ';'
+    '?': ';',
+    'p': 'ρ',
+    'o': 'ο'
 } as {[key: string]: string}
 
 const convertToProperGreek = (text: string): string => {
     let greekText = '';
+    const htmlEntitiesPosition = [...text.matchAll(/(&\w+;)/g)].map(match => ({
+        start: match.index!, 
+        end: (match.index! + match[0].length) - 1
+    }));
+
     for (let i = 0; i < text.length; i++) {
         const maybeRomanChar = text[i];
-        const greekChar = toProperGreekMap[maybeRomanChar];
+        const skip = htmlEntitiesPosition.some(position => i >= position.start  && i <= position.end);
+        const greekChar = skip? maybeRomanChar:  toProperGreekMap[maybeRomanChar];
         if (greekChar != null) {
             greekText += greekChar;
         } else {
@@ -105,11 +113,14 @@ const transliterationMap = {
     'β': 'b',
     'ν': 'n',
     'μ': 'm',
+    'Ἑ': 'É',
     ';': '?',
     ',': ',',
     '/': '/',
     '!': '!',
     '\'': '\'',
+    '«': '\'',
+    '»': '\'',
     '(': '(',
     ')': ')',
     '0': '0',
@@ -216,7 +227,7 @@ try {
             console.warn(`Did not find filter field for note ${note.id}`);
         }
         const filterFieldValue = flds[filterFieldIndex];
-        if (!["0", "1", "2"].includes(filterFieldValue)) {
+        if (!["0", "1", "2", "3", "4", "5", "6" ].includes(filterFieldValue)) {
             console.info(`Skipping note ${note.id}, filter field has value ${filterFieldValue}`);
             continue;
         }
@@ -232,7 +243,7 @@ try {
         const speech = await convertTextToSpeech(decodedTextFieldValue);
         const mediaIndex = '' + nextMediaIndex++;
         writeFileSync(join(tmpDir, mediaIndex), speech, 'binary');
-        const mediaFilename = fixFilenameForAnkiMobile(`${transliterate(decodedTextFieldValue)}.mp3`);
+        const mediaFilename = `${fixFilenameForAnkiMobile(transliterate(decodedTextFieldValue))}.mp3`;
         media[mediaIndex] = mediaFilename;
 
         flds[pronunciationFieldIndex] = `[sound:${mediaFilename}]`;
