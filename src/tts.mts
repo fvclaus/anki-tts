@@ -1,15 +1,16 @@
 import { execSync } from "child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { cp, cpSync, existsSync, fstat, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from "fs";
 import { homedir, tmpdir } from "os";
-import { dirname, join, parse } from "path";
+import { basename, dirname, join, parse } from "path";
 import sqlite3 from 'sqlite3'
 import { open } from 'sqlite'
 import textToSpeech from '@google-cloud/text-to-speech';
 import { decodeHTML } from "entities";
 
-const path = "/home/fredo/temp/anki v3/Ellinika A1.apkg"
-// const path = "/home/fredo/temp/anki/Ellinika A1 (LMU).apkg"
-const outPath = `${dirname(path)}/${parse(path).name}_audio.apkg`
+const DIR_PATH = "/home/fredo/temp/anki v3";
+const BACKUP_DIR_PATH = `${DIR_PATH}/backup`;
+const PATH = `${DIR_PATH}/Ellinika A1.apkg`;
+const OUT_PATH = `${dirname(PATH)}/${parse(PATH).name}_audio.apkg`
 const textFieldName = "Greek"
 const translationFieldName = "English";
 const pronunciationFieldName = "Greek Pronunciation"
@@ -91,6 +92,7 @@ const transliterationMap = {
     'θ': 'th',
     'ι': 'i',
     'ί': 'í',
+    'ϊ': 'í',
     'ο': 'o',
     'ό': 'ó',
     'οι': 'oe',
@@ -132,7 +134,9 @@ const transliterationMap = {
     '6': '6',
     '7': '7',
     '8': '8',
-    '9': '9'
+    '9': '9',
+    '–': '-',
+    '-': '-',
 } as {[key: string]: string};
 
 Object.entries(transliterationMap).forEach(([key, value]) => {
@@ -146,27 +150,28 @@ Object.entries(transliterationMap).forEach(([key, value]) => {
 
 const transliterate = (text: string): string => {
     let transliteratedText = '';
-    for (let i = 0; i < text.length; i++) {
+    outerLoop:
+    for (let i = 0; i < text.length;) {
         const char = text[i];
         if (char.match(/\s|\./)) {
             transliteratedText+= char;
+            i++;
             continue;
         }
-        const nextChar = text[i + 1];
-
-        const combinedTransliteration = transliterationMap[`${char}${nextChar}`];
-        const singleTransliteration = transliterationMap[char];
-        if (combinedTransliteration != null) {
-            transliteratedText += combinedTransliteration;
-            i++;
-        } else if (singleTransliteration != null) {
-            transliteratedText += singleTransliteration;
-        } else {
-            throw new Error(`Cannot transliterate ${char} in ${text}`);
+        const remainingText = text.substring(i);
+        for (const [source, target] of Object.entries(transliterationMap)) {
+            if (remainingText.startsWith(source)) {
+                transliteratedText += target;
+                i += source.length;
+                continue outerLoop;
+            }
         }
+        throw new Error(`Cannot transliterate ${char} in ${text}`);
     }
     return transliteratedText;
 }
+
+// TODO Write log to file
 
 const convertTextToSpeech = async (text: string): Promise<string> => {
     const cachePath = join(TTS_CACHE_PATH, `${text.replaceAll(/\//g, " ")}.mp3`);
@@ -193,9 +198,30 @@ const convertTextToSpeech = async (text: string): Promise<string> => {
 }
 
 try {
-    execSync(`unzip "${path}" -d ${tmpDir}`)
-    if (existsSync(outPath)) {
-        rmSync(outPath);
+    if (!existsSync(BACKUP_DIR_PATH)) {
+        mkdirSync(BACKUP_DIR_PATH);
+    }
+    const backups = readdirSync(BACKUP_DIR_PATH);
+    backups.sort();
+    const latestBackup = backups[backups.length - 1];
+    execSync(`unzip "${BACKUP_DIR_PATH}/${latestBackup}" -d ${tmpDir}`);
+    const backupDb = await open({
+        filename: join(tmpDir, 'collection.anki21'),
+        driver: sqlite3.Database
+    });
+    const lastNotes  = await backupDb.all('SELECT * FROM notes');
+    const markNoteAsPresent = (id: number) => {
+        const index = lastNotes.find(note => note.id == id);
+        lastNotes.splice(index, 1);
+    }
+    await backupDb.close();
+    // TODO wird wegen weiteren ZIP benötigt
+    rmSync(tmpDir, {recursive: true, force: true});
+
+    
+    execSync(`unzip "${PATH}" -d ${tmpDir}`)
+    if (existsSync(OUT_PATH)) {
+        rmSync(OUT_PATH);
     }
     const mediaPath = join(tmpDir, 'media');
     const media = JSON.parse(readFileSync(mediaPath).toString());
@@ -210,7 +236,9 @@ try {
     }
     const models = JSON.parse(cols[0]["models"]);
     const notes  = await db.all('SELECT * FROM notes');
+    await db.exec("BEGIN TRANSACTION");
     for (const note of notes) {
+        markNoteAsPresent(note.id);
         const model = models[note.mid];
         if (model == null) {
             throw new Error(`Did not find model for note ${note.id}`)
@@ -227,7 +255,7 @@ try {
             console.warn(`Did not find filter field for note ${note.id}`);
         }
         const filterFieldValue = flds[filterFieldIndex];
-        if (!["0", "1", "2", "3", "4", "5", "6" ].includes(filterFieldValue)) {
+        if (!["0", "1", "2", "3", "4", "5", "6", "7" ].includes(filterFieldValue)) {
             console.info(`Skipping note ${note.id}, filter field has value ${filterFieldValue}`);
             continue;
         }
@@ -251,13 +279,21 @@ try {
         // Prevent apostrophes from terminating the string.
         const sql = `UPDATE notes set flds = '${flds.join(FIELD_SEPARATOR).replaceAll(/'/g, "''")}' WHERE id = ${note.id} `;
         console.log(`Executing ${sql}`);
-        db.exec(sql)
+        await db.exec(sql)
 
+    }
+
+    await db.exec("COMMIT TRANSACTION");
+
+    if (lastNotes.length > 0) {
+        throw new Error(`These notes disappeared from the last backup: \n${lastNotes.map(note => note.flds).join('\n')}`);
     }
 
     writeFileSync(mediaPath, JSON.stringify(media));
     await db.close();
-    execSync(`zip --junk-paths --recurse-paths "${outPath}" ${tmpDir}`)
+    execSync(`zip --junk-paths --recurse-paths "${OUT_PATH}" ${tmpDir}`);
+    
+    cpSync(PATH, `${BACKUP_DIR_PATH}/${basename(PATH)}-${new Date().toISOString()}.apkg`);
 } finally {
     rmSync(tmpDir, {recursive: true, force: true});
     console.log(`Deleted tmpDir ${tmpDir}`)
