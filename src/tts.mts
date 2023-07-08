@@ -6,19 +6,44 @@ import sqlite3 from 'sqlite3'
 import { open } from 'sqlite'
 import textToSpeech from '@google-cloud/text-to-speech';
 import { decodeHTML } from "entities";
+import * as winston from "winston";
 
-const DIR_PATH = "/home/fredo/temp/anki v3";
+const toUnixTimestamp = (date: Date) => {
+    return parseInt((date.getTime() / 1000).toFixed(0));
+}
+
+const currentTimestamp = toUnixTimestamp(new Date());
+const DIR_PATH = "/home/fredo/stack/anki v3";
 const BACKUP_DIR_PATH = `${DIR_PATH}/backup`;
 const PATH = `${DIR_PATH}/Ellinika A1.apkg`;
+const BACKUP_FILE_NAME = `${BACKUP_DIR_PATH}/${basename(PATH)}-${currentTimestamp}`;
 const OUT_PATH = `${dirname(PATH)}/${parse(PATH).name}_audio.apkg`
 const textFieldName = "Greek"
 const translationFieldName = "English";
 const pronunciationFieldName = "Greek Pronunciation"
 
+const myFormat = winston.format.printf((info) => {
+    return `${info.timestamp}: ${info.message}`;
+  });
+
+const logger = winston.createLogger({
+    level:  'debug',
+    format: winston.format.combine(
+        winston.format.timestamp({
+          format: 'YYYY-MM-DD HH:mm:ss.SSS',
+        }),
+        myFormat
+      ),
+    transports: [
+        new winston.transports.Console(),
+        new winston.transports.File({filename: `${BACKUP_FILE_NAME}.log`})
+    ]
+});
+
 // Unzip
 const tmpDir = mkdtempSync(join(tmpdir(), 'anki-tts-'));
-console.log(`Created tmpDir ${tmpDir}`);
-console.log(tmpDir);
+logger.info(`Created tmpDir ${tmpDir}`);
+logger.info(tmpDir);
 
 const findIndex = (fieldName: string, model: any): number => {
     return model.flds.findIndex((fld: any) => fld.name == fieldName);
@@ -51,9 +76,12 @@ const toProperGreekMap = {
     'ὼ': 'ώ',
     'ὰ': 'ά',
     'ὴ': 'ή',
+    'ὸ': 'ό',
     '?': ';',
     'p': 'ρ',
-    'o': 'ο'
+    'o': 'ο',
+    'a': `α`,
+    'K': 'Κ'
 } as {[key: string]: string}
 
 const convertToProperGreek = (text: string): string => {
@@ -148,6 +176,7 @@ Object.entries(transliterationMap).forEach(([key, value]) => {
 });
 
 
+
 const transliterate = (text: string): string => {
     let transliteratedText = '';
     outerLoop:
@@ -176,7 +205,7 @@ const transliterate = (text: string): string => {
 const convertTextToSpeech = async (text: string): Promise<string> => {
     const cachePath = join(TTS_CACHE_PATH, `${text.replaceAll(/\//g, " ")}.mp3`);
     if (!existsSync(cachePath)) {
-        console.log(`${text} is not cached. Downloading`)
+        logger.info(`${text} is not cached. Downloading`)
         const [response] = await ttsClient.synthesizeSpeech({
             input: {
                 text
@@ -201,7 +230,8 @@ try {
     if (!existsSync(BACKUP_DIR_PATH)) {
         mkdirSync(BACKUP_DIR_PATH);
     }
-    const backups = readdirSync(BACKUP_DIR_PATH);
+    const backups = readdirSync(BACKUP_DIR_PATH)
+        .filter(fileName => fileName.endsWith('.apkg'))
     backups.sort();
     const latestBackup = backups[backups.length - 1];
     execSync(`unzip "${BACKUP_DIR_PATH}/${latestBackup}" -d ${tmpDir}`);
@@ -209,10 +239,11 @@ try {
         filename: join(tmpDir, 'collection.anki21'),
         driver: sqlite3.Database
     });
-    const lastNotes  = await backupDb.all('SELECT * FROM notes');
+    const notesOfLastBackup  = await backupDb.all('SELECT * FROM notes');
+    const numberOfNotesInLastBackup = notesOfLastBackup.length;
     const markNoteAsPresent = (id: number) => {
-        const index = lastNotes.find(note => note.id == id);
-        lastNotes.splice(index, 1);
+        const index = notesOfLastBackup.find(note => note.id == id);
+        notesOfLastBackup.splice(index, 1);
     }
     await backupDb.close();
     // TODO wird wegen weiteren ZIP benötigt
@@ -265,7 +296,7 @@ try {
         flds[textFieldIndex] = textFieldValue;
 
         const translationFieldValue = flds[translationFieldIndex];
-        console.log(`Looking at ${textFieldValue} and ${translationFieldValue}`);
+        logger.info(`Looking at ${textFieldValue} and ${translationFieldValue}`);
 
         const decodedTextFieldValue = decodeHTML(textFieldValue);
         const speech = await convertTextToSpeech(decodedTextFieldValue);
@@ -278,23 +309,26 @@ try {
         
         // Prevent apostrophes from terminating the string.
         const sql = `UPDATE notes set flds = '${flds.join(FIELD_SEPARATOR).replaceAll(/'/g, "''")}' WHERE id = ${note.id} `;
-        console.log(`Executing ${sql}`);
+        logger.debug(`Executing ${sql}`);
         await db.exec(sql)
 
     }
 
     await db.exec("COMMIT TRANSACTION");
 
-    if (lastNotes.length > 0) {
-        throw new Error(`These notes disappeared from the last backup: \n${lastNotes.map(note => note.flds).join('\n')}`);
+    if (notesOfLastBackup.length > 0) {
+        throw new Error(`These notes disappeared from the last backup: \n${notesOfLastBackup.map(note => note.flds).join('\n')}`);
     }
+    logger.info(`All ${numberOfNotesInLastBackup} notes from last backup still present. Currently the deck has ${notes.length} notes.`);
 
     writeFileSync(mediaPath, JSON.stringify(media));
     await db.close();
     execSync(`zip --junk-paths --recurse-paths "${OUT_PATH}" ${tmpDir}`);
     
-    cpSync(PATH, `${BACKUP_DIR_PATH}/${basename(PATH)}-${new Date().toISOString()}.apkg`);
+
+    cpSync(PATH, `${BACKUP_FILE_NAME}.apkg`);
 } finally {
     rmSync(tmpDir, {recursive: true, force: true});
-    console.log(`Deleted tmpDir ${tmpDir}`)
+    logger.info(`Deleted tmpDir ${tmpDir}`)
+    logger.close();
 }

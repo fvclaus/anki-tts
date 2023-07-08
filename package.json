@@ -27,6 +27,7 @@
     "rimraf": "^5.0.0",
     "sqlite": "^4.2.0",
     "sqlite3": "^5.1.6",
-    "typescript": "^5.0.4"
+    "typescript": "^5.0.4",
+    "winston": "^3.9.0"
   }
 }
