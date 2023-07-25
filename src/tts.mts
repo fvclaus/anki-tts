@@ -81,7 +81,8 @@ const toProperGreekMap = {
     'p': 'ρ',
     'o': 'ο',
     'a': `α`,
-    'K': 'Κ'
+    'K': 'Κ',
+    'k': 'κ'
 } as {[key: string]: string}
 
 const convertToProperGreek = (text: string): string => {
@@ -281,13 +282,11 @@ try {
         }
         const flds = note.flds.split(FIELD_SEPARATOR);
         /** Filter start */
-        const filterFieldIndex = findIndex('Unit', model);
-        if (filterFieldIndex == -1) {
-            console.warn(`Did not find filter field for note ${note.id}`);
-        }
-        const filterFieldValue = flds[filterFieldIndex];
-        if (!["0", "1", "2", "3", "4", "5", "6", "7" ].includes(filterFieldValue)) {
-            console.info(`Skipping note ${note.id}, filter field has value ${filterFieldValue}`);
+        const cards = await db.all(`SELECT * FROM cards WHERE nid = ${note.id}`);
+        // Card suspended
+        const allCardsSuspended = cards.every(card => card.queue === -1);
+        if (allCardsSuspended) {
+            logger.info(`Skipping ${note.id}, because all cards are suspended`);
             continue;
         }
         /** Filter end */
