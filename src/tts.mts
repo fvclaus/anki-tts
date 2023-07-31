@@ -7,6 +7,8 @@ import { open } from 'sqlite'
 import textToSpeech from '@google-cloud/text-to-speech';
 import { decodeHTML } from "entities";
 import * as winston from "winston";
+import * as readline from 'node:readline/promises';  // This uses the promise-based APIs
+import { stdin as input, stdout as output } from 'node:process';
 
 const toUnixTimestamp = (date: Date) => {
     return parseInt((date.getTime() / 1000).toFixed(0));
@@ -184,7 +186,7 @@ const transliterate = (text: string): string => {
     for (let i = 0; i < text.length;) {
         const char = text[i];
         if (char.match(/\s|\./)) {
-            transliteratedText+= char;
+            transliteratedText+= '_';
             i++;
             continue;
         }
@@ -243,7 +245,10 @@ try {
     const notesOfLastBackup  = await backupDb.all('SELECT * FROM notes');
     const numberOfNotesInLastBackup = notesOfLastBackup.length;
     const markNoteAsPresent = (id: number) => {
-        const index = notesOfLastBackup.find(note => note.id == id);
+        const index = notesOfLastBackup.findIndex(note => note.id == id);
+        if (index == -1 || index == undefined) {
+            return;
+        }
         notesOfLastBackup.splice(index, 1);
     }
     await backupDb.close();
@@ -316,7 +321,16 @@ try {
     await db.exec("COMMIT TRANSACTION");
 
     if (notesOfLastBackup.length > 0) {
-        throw new Error(`These notes disappeared from the last backup: \n${notesOfLastBackup.map(note => note.flds).join('\n')}`);
+        logger.warn(`These notes disappeared from the last backup: \n${notesOfLastBackup.map(note => note.flds).join('\n')}`)
+        const rl = readline.createInterface({ input, output });
+
+        const answer = await rl.question('Continue? [y] ');
+        rl.close();
+
+        if (answer.toLowerCase() !== 'y') {
+            throw new Error('Abort.')
+        }
+        logger.info('Continuing.')
     }
     logger.info(`All ${numberOfNotesInLastBackup} notes from last backup still present. Currently the deck has ${notes.length} notes.`);
 
