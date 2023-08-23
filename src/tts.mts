@@ -203,8 +203,6 @@ const transliterate = (text: string): string => {
     return transliteratedText;
 }
 
-// TODO Write log to file
-
 const convertTextToSpeech = async (text: string): Promise<string> => {
     const cachePath = join(TTS_CACHE_PATH, `${text.replaceAll(/\//g, " ")}.mp3`);
     if (!existsSync(cachePath)) {
