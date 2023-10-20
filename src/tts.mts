@@ -70,6 +70,7 @@ const fixFilenameForAnkiMobile = (filename: string): string => {
 }
 
 const toProperGreekMap = {
+    'i': 'ι',
     'ì': 'ί',
     'í': 'ί',
     'ὶ': 'ί',
@@ -114,6 +115,7 @@ const transliterationMap = {
     'αι': 'ae',
     'ς': 's',
     'ε': 'e',
+    'Ἐ': 'E',
     'έ': 'é',
     'ει': 'e',
     'ρ': 'r',
@@ -168,6 +170,7 @@ const transliterationMap = {
     '9': '9',
     '–': '-',
     '-': '-',
+    '’': '',
 } as {[key: string]: string};
 
 Object.entries(transliterationMap).forEach(([key, value]) => {
@@ -200,7 +203,7 @@ const transliterate = (text: string): string => {
         }
         throw new Error(`Cannot transliterate ${char} in ${text}`);
     }
-    return transliteratedText;
+    return transliteratedText.replaceAll(/_+/g, '_');
 }
 
 const convertTextToSpeech = async (text: string): Promise<string> => {
