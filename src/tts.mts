@@ -14,15 +14,18 @@ const toUnixTimestamp = (date: Date) => {
     return parseInt((date.getTime() / 1000).toFixed(0));
 }
 
+
+// TODO Check if scheduling is present.
+
+
 const currentTimestamp = toUnixTimestamp(new Date());
 const DIR_PATH = "/home/fredo/stack/anki v3";
 const BACKUP_DIR_PATH = `${DIR_PATH}/backup`;
 const PATH = `${DIR_PATH}/Ellinika A1.apkg`;
 const BACKUP_FILE_NAME = `${BACKUP_DIR_PATH}/${basename(PATH)}-${currentTimestamp}`;
 const OUT_PATH = `${dirname(PATH)}/${parse(PATH).name}_audio.apkg`
-const textFieldName = "Greek"
 const translationFieldName = "English";
-const pronunciationFieldName = "Greek Pronunciation"
+const fieldPairs : [string, string][] =  [["Greek", "Greek Pronunciation"], ["Αόριστος", "Αόριστος Pronunciation"]]
 
 const myFormat = winston.format.printf((info) => {
     return `${info.timestamp}: ${info.message}`;
@@ -171,6 +174,7 @@ const transliterationMap = {
     '–': '-',
     '-': '-',
     '’': '',
+    'A': 'Α'
 } as {[key: string]: string};
 
 Object.entries(transliterationMap).forEach(([key, value]) => {
@@ -281,8 +285,9 @@ try {
         if (model == null) {
             throw new Error(`Did not find model for note ${note.id}`)
         }
-        const [textFieldIndex, translationFieldIndex, pronunciationFieldIndex] = [findIndex(textFieldName, model), findIndex(translationFieldName, model), findIndex(pronunciationFieldName, model)];
-        if (textFieldIndex == -1 || translationFieldIndex == -1 || pronunciationFieldIndex == -1) {
+        const translationFieldIndex  = findIndex(translationFieldName, model);
+        const fieldPairIndexes = fieldPairs.map(([fieldName1, fieldName2]) => [findIndex(fieldName1, model), findIndex(fieldName2, model)])
+        if (translationFieldIndex == -1 ||  fieldPairIndexes.every(([fieldIndex1, fieldIndex2]) => fieldIndex1 == -1 && fieldIndex2 == -1)) {
             console.warn(`Did not find all fields for note ${note.id}`);
             continue;
         }
@@ -297,20 +302,26 @@ try {
         }
         /** Filter end */
 
-        const textFieldValue = convertToProperGreek(flds[textFieldIndex]);
-        flds[textFieldIndex] = textFieldValue;
+        for (const [textFieldIndex, pronunciationFieldIndex] of fieldPairIndexes) {
+            if (textFieldIndex == -1 && pronunciationFieldIndex == -1) {
+                continue;
+            }
+            const textFieldValue = convertToProperGreek(flds[textFieldIndex]);
+            flds[textFieldIndex] = textFieldValue;
+    
+            const translationFieldValue = flds[translationFieldIndex];
+            logger.info(`Looking at ${textFieldValue} and ${translationFieldValue}`);
+    
+            const decodedTextFieldValue = decodeHTML(textFieldValue);
+            const speech = await convertTextToSpeech(decodedTextFieldValue);
+            const mediaIndex = '' + nextMediaIndex++;
+            writeFileSync(join(tmpDir, mediaIndex), speech, 'binary');
+            const mediaFilename = `${fixFilenameForAnkiMobile(transliterate(decodedTextFieldValue))}.mp3`;
+            media[mediaIndex] = mediaFilename;
+    
+            flds[pronunciationFieldIndex] = `[sound:${mediaFilename}]`;
+        }
 
-        const translationFieldValue = flds[translationFieldIndex];
-        logger.info(`Looking at ${textFieldValue} and ${translationFieldValue}`);
-
-        const decodedTextFieldValue = decodeHTML(textFieldValue);
-        const speech = await convertTextToSpeech(decodedTextFieldValue);
-        const mediaIndex = '' + nextMediaIndex++;
-        writeFileSync(join(tmpDir, mediaIndex), speech, 'binary');
-        const mediaFilename = `${fixFilenameForAnkiMobile(transliterate(decodedTextFieldValue))}.mp3`;
-        media[mediaIndex] = mediaFilename;
-
-        flds[pronunciationFieldIndex] = `[sound:${mediaFilename}]`;
         
         // Prevent apostrophes from terminating the string.
         const sql = `UPDATE notes set flds = '${flds.join(FIELD_SEPARATOR).replaceAll(/'/g, "''")}' WHERE id = ${note.id} `;
