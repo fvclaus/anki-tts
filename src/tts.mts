@@ -25,7 +25,7 @@ const PATH = `${DIR_PATH}/Ellinika A1.apkg`;
 const BACKUP_FILE_NAME = `${BACKUP_DIR_PATH}/${basename(PATH)}-${currentTimestamp}`;
 const OUT_PATH = `${dirname(PATH)}/${parse(PATH).name}_audio.apkg`
 const translationFieldName = "English";
-const fieldPairs : [string, string][] =  [["Greek", "Greek Pronunciation"], ["Αόριστος", "Αόριστος Pronunciation"]]
+const fieldPairs : [string, string][] =  [["Greek", "Greek Pronunciation"], ["Αόριστος", "Αόριστος Pronunciation"], ["Μέλλοντας στιγμιαίος", "Μέλλοντας στιγμιαίος Pronunciation"]];
 
 const myFormat = winston.format.printf((info) => {
     return `${info.timestamp}: ${info.message}`;
