@@ -306,10 +306,17 @@ try {
             if (textFieldIndex == -1 && pronunciationFieldIndex == -1) {
                 continue;
             }
+            
             const textFieldValue = convertToProperGreek(flds[textFieldIndex]);
             flds[textFieldIndex] = textFieldValue;
     
             const translationFieldValue = flds[translationFieldIndex];
+
+            const pronunciationFieldValue = flds[pronunciationFieldIndex];
+            if (pronunciationFieldValue != null && pronunciationFieldValue.match(/\[sound:.+\.mp3\]/)) {
+                logger.info(`Skipping field ${textFieldValue} and ${translationFieldValue}, because they already have sound.`);
+                continue;
+            }
             logger.info(`Looking at ${textFieldValue} and ${translationFieldValue}`);
     
             const decodedTextFieldValue = decodeHTML(textFieldValue);
