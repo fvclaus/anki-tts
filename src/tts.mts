@@ -15,6 +15,7 @@ const toUnixTimestamp = (date: Date) => {
 }
 
 
+// To get GOOGLE_APPLICATION_CREDENTIALS, open the Google Cloud Console, open or create a service account and create a new key. Save the file somewhere and provide the path to it in GOOGLE_APPLICATION_CREDENTIALS
 // TODO Check if scheduling is present.
 
 
@@ -88,7 +89,8 @@ const toProperGreekMap = {
     'o': 'ο',
     'a': `α`,
     'K': 'Κ',
-    'k': 'κ'
+    'k': 'κ',
+    'M': 'Μ',
 } as {[key: string]: string}
 
 const convertToProperGreek = (text: string): string => {
