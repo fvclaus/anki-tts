@@ -297,15 +297,6 @@ try {
             continue;
         }
         const flds = note.flds.split(FIELD_SEPARATOR);
-        /** Filter start */
-        const cards = await db.all(`SELECT * FROM cards WHERE nid = ${note.id}`);
-        // Card suspended
-        const allCardsSuspended = cards.every(card => card.queue === -1);
-        if (allCardsSuspended) {
-            logger.info(`Skipping ${note.id}, because all cards are suspended`);
-            continue;
-        }
-        /** Filter end */
 
         for (const [textFieldIndex, pronunciationFieldIndex] of fieldPairIndexes) {
             if (textFieldIndex == -1 && pronunciationFieldIndex == -1) {
