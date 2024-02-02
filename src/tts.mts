@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { exec, execSync } from "child_process";
 import { cp, cpSync, existsSync, fstat, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from "fs";
 import { homedir, tmpdir } from "os";
 import { basename, dirname, join, parse } from "path";
@@ -215,6 +215,21 @@ const transliterate = (text: string): string => {
     return transliteratedText.replaceAll(/_+/g, '_');
 }
 
+
+function executeBashCommand(command: string) {
+    return new Promise((resolve, reject) => {
+      logger.debug(`Executing ${command}`);
+      exec(command, (error, stdout, stderr) => {
+        if (error) {
+          reject(`Error: ${error.message}`);
+          return;
+        }
+        resolve(stdout);
+      });
+    });
+}
+
+
 const convertTextToSpeech = async (text: string): Promise<string> => {
     const cachePath = join(TTS_CACHE_PATH, `${text.replaceAll(/\//g, " ")}.mp3`);
     if (!existsSync(cachePath)) {
@@ -234,6 +249,9 @@ const convertTextToSpeech = async (text: string): Promise<string> => {
             throw new Error(`Did not receive proper response`);
         }
         writeFileSync(cachePath, response.audioContent, 'binary');
+        await executeBashCommand(`mplayer -af scaletempo -speed 1.3 "${cachePath}" -ao pcm:fast:file="/tmp/tts.mp3"`);
+        // TODO Clean this up
+        await executeBashCommand(`cp "/tmp/tts.mp3" "${cachePath}"`);
     }
 
     return readFileSync(cachePath, {encoding: 'binary'})
