@@ -229,6 +229,9 @@ function executeBashCommand(command: string) {
     });
 }
 
+const SPEED = 1.45
+let MAX_DOWNLOAD = 500;
+const SPEED_SUFFIX=`${SPEED}x`
 
 const convertTextToSpeech = async (text: string): Promise<string> => {
     const cachePath = join(TTS_CACHE_PATH, `${text.replaceAll(/\//g, " ")}.mp3`);
@@ -249,12 +252,16 @@ const convertTextToSpeech = async (text: string): Promise<string> => {
             throw new Error(`Did not receive proper response`);
         }
         writeFileSync(cachePath, response.audioContent, 'binary');
-        await executeBashCommand(`mplayer -af scaletempo -speed 1.3 "${cachePath}" -ao pcm:fast:file="/tmp/tts.mp3"`);
-        // TODO Clean this up
-        await executeBashCommand(`cp "/tmp/tts.mp3" "${cachePath}"`);
     }
 
-    return readFileSync(cachePath, {encoding: 'binary'})
+    const cachePathWithSpeed = cachePath.replace('.mp3', `_${SPEED_SUFFIX}.mp3`);
+    if (!existsSync(cachePathWithSpeed)) {
+        await executeBashCommand(`mplayer -af scaletempo -speed ${SPEED} "${cachePath}" -ao pcm:fast:file="/tmp/tts.mp3"`);
+        // TODO Clean this up
+        await executeBashCommand(`cp "/tmp/tts.mp3" "${cachePathWithSpeed}"`);
+    }
+
+    return readFileSync(cachePathWithSpeed, {encoding: 'binary'})
 }
 
 try {
@@ -328,8 +335,19 @@ try {
 
             const pronunciationFieldValue = flds[pronunciationFieldIndex];
             if (pronunciationFieldValue != null && pronunciationFieldValue.match(/\[sound:.+\.mp3\]/)) {
-                logger.info(`Skipping field ${textFieldValue} and ${translationFieldValue}, because they already have sound.`);
-                continue;
+                const speedMatches = pronunciationFieldValue.match(SPEED_SUFFIX);
+                if (speedMatches) {
+                    logger.info(`Skipping field ${textFieldValue} and ${translationFieldValue}, because they already have sound.`);
+                    continue;
+                } else if (MAX_DOWNLOAD <= 0) {
+                    // TODO delete
+                    logger.info(`Skipping field ${textFieldValue} and ${translationFieldValue}, because already redownloaded too many files today.`);
+                    continue;
+                }
+                else {
+                    MAX_DOWNLOAD--;
+                    logger.info(`Redownloading ${textFieldValue}, because ${pronunciationFieldValue} does not match desired speed ${SPEED}.`);
+                }
             }
             logger.info(`Looking at ${textFieldValue} and ${translationFieldValue}`);
     
@@ -337,7 +355,7 @@ try {
             const speech = await convertTextToSpeech(decodedTextFieldValue);
             const mediaIndex = '' + nextMediaIndex++;
             writeFileSync(join(tmpDir, mediaIndex), speech, 'binary');
-            const mediaFilename = `${fixFilenameForAnkiMobile(transliterate(decodedTextFieldValue))}.mp3`;
+            const mediaFilename = `${fixFilenameForAnkiMobile(transliterate(decodedTextFieldValue))}_${SPEED_SUFFIX}.mp3`;
             media[mediaIndex] = mediaFilename;
     
             flds[pronunciationFieldIndex] = `[sound:${mediaFilename}]`;
