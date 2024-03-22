@@ -179,7 +179,8 @@ const transliterationMap = {
     '’': '',
     'A': 'Α',
     'Ἀ': 'A',
-    'ϋ': 'y'
+    'ϋ': 'y',
+    '…': '...'
 } as {[key: string]: string};
 
 Object.entries(transliterationMap).forEach(([key, value]) => {
@@ -229,8 +230,8 @@ function executeBashCommand(command: string) {
     });
 }
 
-const SPEED = 1.45
-let MAX_DOWNLOAD = 500;
+const SPEED = 1.6
+let MAX_DOWNLOAD = 999999;
 const SPEED_SUFFIX=`${SPEED}x`
 
 const convertTextToSpeech = async (text: string): Promise<string> => {
