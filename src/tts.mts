@@ -20,9 +20,9 @@ const toUnixTimestamp = (date: Date) => {
 
 
 const currentTimestamp = toUnixTimestamp(new Date());
-const DIR_PATH = "/home/fredo/stack/anki v3";
+const DIR_PATH = `${homedir()}/stack/anki v3`;
 const BACKUP_DIR_PATH = `${DIR_PATH}/backup`;
-const PATH = `${DIR_PATH}/Ellinika A1.apkg`;
+const PATH = `${DIR_PATH}/Ellinika.apkg`;
 const BACKUP_FILE_NAME = `${BACKUP_DIR_PATH}/${basename(PATH)}-${currentTimestamp}`;
 const OUT_PATH = `${dirname(PATH)}/${parse(PATH).name}_audio.apkg`
 const translationFieldName = "English";
