@@ -92,6 +92,7 @@ const toProperGreekMap = {
     'k': 'κ',
     'M': 'Μ',
     'm': 'μ',
+    'T': 'Τ'
 } as {[key: string]: string}
 
 const convertToProperGreek = (text: string): string => {
@@ -132,6 +133,7 @@ const transliterationMap = {
     'ι': 'i',
     'ί': 'í',
     'ϊ': 'í',
+    'ΐ': 'í',
     'ο': 'o',
     'ό': 'ó',
     'οι': 'oe',
@@ -180,7 +182,8 @@ const transliterationMap = {
     'A': 'Α',
     'Ἀ': 'A',
     'ϋ': 'y',
-    '…': '...'
+    '…': '...',
+    '΄': '',
 } as {[key: string]: string};
 
 Object.entries(transliterationMap).forEach(([key, value]) => {
